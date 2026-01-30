@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "base-64": "^1.0.0",
     "exceljs": "^4.4.0",
     "expo": "~54.0.32",
     "expo-document-picker": "^14.0.8",

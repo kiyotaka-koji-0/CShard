@@ -11,8 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
-import { encode as btoa } from 'base-64';
+import * as FileSystem from 'expo-file-system';
 import { saveToHistory, getHistory } from './src/utils/storageManager';
 import { parseSpreadsheet, exportSpreadsheetWithColors } from './src/utils/spreadsheetParser';
 import { useUndo } from './src/hooks/useUndo';
@@ -66,14 +65,10 @@ export default function App() {
       const fileUri = asset.uri;
       const fname = asset.name;
 
-      const file = new File(fileUri);
-      const content = await file.text();
-      
-      let binary = '';
-      for (let i = 0; i < content.length; i++) {
-        binary += String.fromCharCode(content.charCodeAt(i) & 0xff);
-      }
-      const base64Content = btoa(binary);
+      // Read file as base64
+      const base64Content = await FileSystem.readAsStringAsync(fileUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
       
       const parsed = await parseSpreadsheet(base64Content, fname, true);
       setTempData(parsed.data);
