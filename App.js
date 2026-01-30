@@ -14,7 +14,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { encode as btoa } from 'base-64';
 import { saveToHistory, getHistory } from './src/utils/storageManager';
-import { parseSpreadsheet, exportSpreadsheet } from './src/utils/spreadsheetParser';
+import { parseSpreadsheet, exportSpreadsheetWithColors } from './src/utils/spreadsheetParser';
 import { useUndo } from './src/hooks/useUndo';
 import { CardView } from './src/components/CardView';
 import { HeaderSelectScreen } from './src/screens/HeaderSelectScreen';
@@ -176,7 +176,7 @@ export default function App() {
     try {
       const Sharing = await import('expo-sharing');
       
-      const result = await exportSpreadsheet(
+      const result = await exportSpreadsheetWithColors(
         spreadsheetData, 
         fileName, 
         rowColors,

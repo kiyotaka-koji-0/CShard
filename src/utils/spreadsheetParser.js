@@ -1,5 +1,6 @@
 import { Workbook } from 'exceljs';
 import { Buffer } from 'buffer';
+import XlsxPopulate from 'xlsx-populate';
 
 // Parse CSV content into 2D array
 export const parseCSV = (csvContent) => {
@@ -167,7 +168,112 @@ export const parseSpreadsheet = async (fileContent, fileName, isBase64 = false) 
   }
 };
 
-// Export by cloning original workbook and updating values only
+// Export using xlsx-populate for perfect color preservation
+export const exportSpreadsheetWithColors = async (data, fileName, rowColors = {}, titleText = null, originalWorkbook = null) => {
+  try {
+    const FileSystem = await import('expo-file-system/legacy');
+    
+    if (!originalWorkbook) {
+      // Fallback to ExcelJS if no original workbook
+      return await exportSpreadsheet(data, fileName, rowColors, titleText, originalWorkbook);
+    }
+    
+    // Convert ExcelJS workbook to buffer
+    const excelJsBuffer = await originalWorkbook.xlsx.writeBuffer();
+    
+    // Load with xlsx-populate which preserves indexed colors
+    const workbook = await XlsxPopulate.fromDataAsync(excelJsBuffer);
+    const sheet = workbook.sheet(0);
+    
+    // Find title row (merged cell)
+    let titleRowNum = null;
+    let headerRowNum = null;
+    
+    // Detect merged cells for title
+    const merges = sheet._mergeCells || [];
+    for (let i = 0; i < merges.length; i++) {
+      const merge = merges[i];
+      const addr = merge.address();
+      // Check if it's a horizontal merge in first row
+      if (addr.startsWith('A1:')) {
+        titleRowNum = 1;
+        break;
+      }
+      if (addr.startsWith('A2:')) {
+        titleRowNum = 2;
+        break;
+      }
+    }
+    
+    // Find header row (first row with multiple distinct values after title)
+    let searchStart = titleRowNum ? titleRowNum + 1 : 1;
+    for (let r = searchStart; r <= Math.min(searchStart + 5, sheet.usedRange()._maxRowNumber); r++) {
+      const values = [];
+      for (let c = 1; c <= 10; c++) {
+        const val = sheet.row(r).cell(c).value();
+        if (val) values.push(String(val));
+      }
+      const uniqueValues = new Set(values);
+      if (uniqueValues.size >= 3 && values.length >= 3) {
+        headerRowNum = r;
+        break;
+      }
+    }
+    
+    if (!headerRowNum) {
+      headerRowNum = titleRowNum ? titleRowNum + 1 : 1;
+    }
+    
+    // Update title if exists
+    if (titleRowNum && titleText) {
+      sheet.row(titleRowNum).cell(1).value(titleText);
+    }
+    
+    // Update data rows (xlsx-populate uses 1-based indexing)
+    data.forEach((row, rowIndex) => {
+      const excelRowNum = headerRowNum + rowIndex;
+      const excelRow = sheet.row(excelRowNum);
+      
+      row.forEach((cellValue, colIndex) => {
+        const cell = excelRow.cell(colIndex + 1);
+        // Only update value - xlsx-populate preserves all formatting automatically!
+        cell.value(cellValue);
+      });
+    });
+    
+    const timestamp = new Date().toISOString().split('T')[0];
+    const baseFileName = fileName.split('.')[0];
+    const outputFileName = `${baseFileName}_edited_${timestamp}.xlsx`;
+    
+    const documentDir = `${FileSystem.documentDirectory}CShard_Exports/`;
+    
+    try {
+      await FileSystem.makeDirectoryAsync(documentDir, { intermediates: true });
+    } catch (e) {
+      // Directory might already exist
+    }
+
+    const filePath = `${documentDir}${outputFileName}`;
+    
+    // Write to file
+    const outputBuffer = await workbook.outputAsync();
+    const base64 = outputBuffer.toString('base64');
+    await FileSystem.writeAsStringAsync(filePath, base64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    return {
+      fileName: outputFileName,
+      filePath,
+    };
+  } catch (error) {
+    console.error('Error exporting with xlsx-populate:', error);
+    // Fallback to ExcelJS
+    return await exportSpreadsheet(data, fileName, rowColors, titleText, originalWorkbook);
+  }
+};
+
+// Original ExcelJS export function (fallback)
 export const exportSpreadsheet = async (data, fileName, rowColors = {}, titleText = null, originalWorkbook = null) => {
   try {
     const FileSystem = await import('expo-file-system/legacy');
